@@ -8,6 +8,20 @@ multi-state lifetable simulations.
 
 """
 import pandas as pd
+import os
+
+
+def output_csv_mkdir(data, path, index):
+    """
+    Wrapper for pandas .to_csv() method to create directory for path if it
+    doesn't already exist.
+    """
+    out_folder = os.path.dirname(path)
+
+    if not os.path.exists(out_folder):
+        os.mkdir(out_folder)
+
+    data.to_csv(path, index=index)
 
 
 def output_file(config, suffix, sep='_', ext='csv'):
@@ -153,7 +167,7 @@ class MorbidityMortality:
         data['HALE'] = self.calculate_LE(data, 'HALY', 'prev_population')
         data['bau_HALE'] = self.calculate_LE(data, 'bau_HALY',
                                            'bau_prev_population')
-        data.to_csv(self.output_file, index=False)
+        output_csv_mkdir(data, self.output_file, index=False)
 
 
 class Disease:
@@ -239,7 +253,7 @@ class Disease:
         diff_cols = ['diff_incidence', 'diff_prevalence']
         cols = ['disease', 'year_of_birth'] + self.table_cols + diff_cols
         data = data[cols]
-        data.to_csv(self.output_file, index=False)
+        output_csv_mkdir(data, self.output_file, index=False)
 
 
 class TobaccoPrevalence:
@@ -346,4 +360,4 @@ class TobaccoPrevalence:
         # Re-order the table columns.
         cols = ['year_of_birth'] + self.table_cols
         data = data.reindex(columns=cols)
-        data.to_csv(self.output_file, index=False)
+        output_csv_mkdir(data, self.output_file, index=False)
