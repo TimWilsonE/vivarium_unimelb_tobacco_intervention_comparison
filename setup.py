@@ -17,13 +17,13 @@ if __name__ == "__main__":
         long_description = f.read()
 
     install_requirements = [
-        'vivarium==0.9.1',
+        'vivarium',
 
         # These are pinned for internal dependencies on IHME libraries
-        'numpy<=1.15.4',
-        'numexpr==2.7.1',
-        'tables<=3.3',
-        'pandas<0.25',
+        'numpy',
+        'numexpr',
+        'tables',
+        'pandas',
         
         'scipy',
         'jinja2',
@@ -44,8 +44,8 @@ if __name__ == "__main__":
         'jupyter',
         'jupyterlab',
 
-        'vivarium_cluster_tools==1.0.14',
-        'vivarium_inputs[data]==3.0.0',
+        'vivarium_cluster_tools',
+        'vivarium_inputs[data]',
     ]
 
     setup(

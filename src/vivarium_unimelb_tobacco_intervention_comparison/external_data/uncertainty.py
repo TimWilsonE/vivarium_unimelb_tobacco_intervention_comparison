@@ -45,7 +45,7 @@ def sample_column_long(data, column, dist, samples):
     mean_values = data[column]
     sample_shape = len(mean_values) * num_draws
 
-    all_zeros = len(mean_values.nonzero()[0]) == 0
+    all_zeros = len(mean_values.to_numpy().nonzero()[0]) == 0
     if all_zeros:
         sampled_values = np.zeros(sample_shape)
     else:
