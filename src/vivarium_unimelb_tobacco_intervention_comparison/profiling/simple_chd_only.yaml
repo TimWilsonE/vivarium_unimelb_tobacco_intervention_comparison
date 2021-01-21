@@ -1,11 +1,5 @@
-plugins:
-    optional:
-        data:
-            controller: "vivarium_public_health.dataset_manager.ArtifactManager"
-            builder_interface: "vivarium_public_health.dataset_manager.ArtifactManagerInterface"
-
 components:
-    vivarium_public_health:
+    vivarium_unimelb_tobacco_intervention_comparison:
         mslt:
             population:
                 - BasePopulation()

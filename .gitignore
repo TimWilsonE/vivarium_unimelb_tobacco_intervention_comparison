@@ -125,3 +125,27 @@ dmypy.json
 
 # Pycharm project settings
 .idea/
+/artifacts/mslt_tobacco_maori_0-years.hdf
+/artifacts/mslt_tobacco_maori_20-years.hdf
+/artifacts/mslt_tobacco_non-maori_0-years.hdf
+/artifacts/mslt_tobacco_non-maori_20-years.hdf
+/model_specifications/mslt_reduce_acmr.yaml
+/model_specifications/mslt_reduce_chd.yaml
+/model_specifications/mslt_tobacco_maori_0-years_decreasing_erad.yaml
+/model_specifications/mslt_tobacco_maori_0-years_decreasing_tax.yaml
+/model_specifications/mslt_tobacco_maori_0-years_decreasing_tfg.yaml
+/model_specifications/mslt_tobacco_maori_20-years_constant_erad.yaml
+/model_specifications/mslt_tobacco_maori_20-years_constant_tax.yaml
+/model_specifications/mslt_tobacco_maori_20-years_constant_tfg.yaml
+/model_specifications/mslt_tobacco_maori_20-years_decreasing_erad.yaml
+/model_specifications/mslt_tobacco_maori_20-years_decreasing_tax.yaml
+/model_specifications/mslt_tobacco_maori_20-years_decreasing_tfg.yaml
+/model_specifications/mslt_tobacco_non-maori_0-years_decreasing_erad.yaml
+/model_specifications/mslt_tobacco_non-maori_0-years_decreasing_tax.yaml
+/model_specifications/mslt_tobacco_non-maori_0-years_decreasing_tfg.yaml
+/model_specifications/mslt_tobacco_non-maori_20-years_constant_erad.yaml
+/model_specifications/mslt_tobacco_non-maori_20-years_constant_tax.yaml
+/model_specifications/mslt_tobacco_non-maori_20-years_constant_tfg.yaml
+/model_specifications/mslt_tobacco_non-maori_20-years_decreasing_erad.yaml
+/model_specifications/mslt_tobacco_non-maori_20-years_decreasing_tax.yaml
+/model_specifications/mslt_tobacco_non-maori_20-years_decreasing_tfg.yaml
