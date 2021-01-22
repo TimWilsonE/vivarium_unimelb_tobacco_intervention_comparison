@@ -3,11 +3,11 @@ from pathlib import Path
 
 import click
 
-from vivarium_unimelb_tobacco_intervention_comparison.external_data import assemble_tobacco_artifacts
-from vivarium_unimelb_tobacco_intervention_comparison.external_data import (create_model_specifications,
+from unimelb_viv.external_data import assemble_tobacco_artifacts
+from unimelb_viv.external_data import (create_model_specifications,
                                                                             create_reduce_acmr_specification,
                                                                             create_reduce_chd_specification)
-from vivarium_unimelb_tobacco_intervention_comparison.external_data import run_many
+from unimelb_viv.external_data import run_many
 
 
 @click.command()

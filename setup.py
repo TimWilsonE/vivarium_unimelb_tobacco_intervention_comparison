@@ -10,7 +10,7 @@ if __name__ == "__main__":
     src_dir = os.path.join(base_dir, "src")
 
     about = {}
-    with open(os.path.join(src_dir, "vivarium_unimelb_tobacco_intervention_comparison", "__about__.py")) as f:
+    with open(os.path.join(src_dir, "unimelb_viv", "__about__.py")) as f:
         exec(f.read(), about)
 
     with open(os.path.join(base_dir, "README.rst")) as f:
@@ -73,9 +73,9 @@ if __name__ == "__main__":
 
         entry_points="""
             [console_scripts]
-            make_artifacts=vivarium_unimelb_tobacco_intervention_comparison.cli:make_artifacts
-            make_model_specifications=vivarium_unimelb_tobacco_intervention_comparison.cli:make_model_specifications
-            run_uncertainty_analysis=vivarium_unimelb_tobacco_intervention_comparison.cli:run_uncertainty_analysis
+            make_artifacts=unimelb_viv.cli:make_artifacts
+            make_model_specifications=unimelb_viv.cli:make_model_specifications
+            run_uncertainty_analysis=unimelb_viv.cli:run_uncertainty_analysis
         """,
 
 

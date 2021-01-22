@@ -3,7 +3,7 @@ __all__ = [
     "__email__", "__license__", "__copyright__",
 ]
 
-__title__ = "vivarium_unimelb_tobacco_intervention_comparison"
+__title__ = "unimelb_viv"
 __summary__ = f"Research repository for the {__title__} project."
 __uri__ = f"https://github.com/population-interventions/{__title__}"
 

@@ -8,14 +8,28 @@ import pandas as pd
 from vivarium.framework.artifact import hdf
 from vivarium.framework.artifact import Artifact
 
-from vivarium_unimelb_tobacco_intervention_comparison.external_data.population import Population
-from vivarium_unimelb_tobacco_intervention_comparison.external_data.disease import Diseases
-from vivarium_unimelb_tobacco_intervention_comparison.external_data.risk_factor import Tobacco
-from vivarium_unimelb_tobacco_intervention_comparison.external_data.uncertainty import Normal, Beta, LogNormal
-from vivarium_unimelb_tobacco_intervention_comparison.external_data.utilities import get_data_dir
+from unimelb_viv.external_data.population import Population
+from unimelb_viv.external_data.disease import Diseases
+from unimelb_viv.external_data.risk_factor import Tobacco
+from unimelb_viv.external_data.uncertainty import Normal, Beta, LogNormal
+from unimelb_viv.external_data.utilities import get_data_dir
 
 YEAR_START = 2011
 RANDOM_SEED = 49430
+
+def output_csv_mkdir(data, path):
+    """
+    Wrapper for pandas .to_csv() method to create directory for path if it
+    doesn't already exist.
+    """
+    output_path = Path('.').resolve() / 'artifacts' / (path + '.csv')
+    out_folder = os.path.dirname(output_path)
+
+    if not os.path.exists(out_folder):
+        os.mkdir(out_folder)
+
+    print(output_path)
+    data.to_csv(output_path)
 
 
 def check_for_bin_edges(df):
@@ -28,6 +42,115 @@ def check_for_bin_edges(df):
         return df
     else:
         raise ValueError('Table does not have bins')
+
+
+def write_table(artifact, path, data):
+    """
+    Write a data table to an artifact, after ensuring that it doesn't contain
+    any NA values.
+
+    :param artifact: The artifact object.
+    :param path: The table path.
+    :param data: The table data.
+    """
+    if np.any(data.isna()):
+        msg = 'NA values in table {} for {}'.format(path, artifact.path)
+        raise ValueError(msg)
+
+    logger = logging.getLogger(__name__)
+    logger.info('{} Writing table {} to {}'.format(
+        datetime.datetime.now().strftime("%H:%M:%S"), path, artifact.path))
+
+    #Add age,sex,year etc columns to multi index
+    col_index_filters = ['year','age','sex','year_start','year_end','age_start','age_end']
+    data.set_index([col_name for col_name in data.columns if col_name in col_index_filters], inplace =True)
+    
+    #Convert wide to long for tobacco
+    if 'value' not in data.columns:
+        data = pd.melt(data.reset_index(), id_vars=data.index.names,var_name = 'measure').\
+        set_index(data.index.names+['measure'])
+
+    output_csv_mkdir(data, path)
+    artifact.write(path, data)
+
+
+def collapse_tobacco_prevalence(data, exposure):
+    """
+    Collapse the tunnel states into a single post-cessation state.
+
+    :param data: The prevalence data.
+    :param exposure: The name of the exposure.
+    """
+    all_columns = data.columns
+
+    prefix = '{}.'.format(exposure)
+    suffixes = ['no', 'yes', '0']
+
+    prev_cols = [prefix + suffix for suffix in suffixes]
+    idx_cols = [c for c in all_columns if not c.startswith(exposure)]
+
+    want_cols = idx_cols + prev_cols
+    keep_cols = [c for c in all_columns if c in want_cols]
+    data = data.loc[:, keep_cols]
+
+    # Ensure that each row sums to unity.
+    final_col = prefix + '0'
+    other_prev_cols = [c for c in prev_cols if c != final_col]
+    data.loc[:, final_col] = 1.0 - data.loc[:, other_prev_cols].sum(axis=1)
+
+    return data
+
+
+def collapse_tobacco_mortality_rr(data, exposure):
+    """
+    Make remission instantly confer a relative risk of 1.0.
+
+    :param data: The mortality relative risk data.
+    :param exposure: The name of the exposure.
+    """
+    all_columns = data.columns
+
+    bau_prefix = '{}.'.format(exposure)
+    int_prefix = '{}_intervention.'.format(exposure)
+    suffixes = ['no', 'yes', '0']
+
+    bau_cols = [bau_prefix + suffix for suffix in suffixes]
+    int_cols = [int_prefix + suffix for suffix in suffixes]
+    idx_cols = [c for c in all_columns if not c.startswith(exposure)]
+
+    want_cols = idx_cols + bau_cols + int_cols
+    keep_cols = [c for c in all_columns if c in want_cols]
+    data = data.loc[:, keep_cols]
+
+    bau_final = bau_prefix + '0'
+    int_final = int_prefix + '0'
+    data.loc[:, bau_final] = 1.0
+    data.loc[:, int_final] = 1.0
+
+    return data
+
+
+def collapse_tobacco_disease_rr(data):
+    """
+    Make remission instantly confer a relative risk of 1.0.
+
+    :param data: The disease incidence relative risk data.
+    """
+    all_columns = data.columns
+
+    diseases = list({c[:-4] for c in all_columns if c.endswith('_yes')})
+    suffixes = ['no', 'yes', 'post_0']
+
+    for disease in diseases:
+        prefix = '{}_'.format(disease)
+        dis_cols = [prefix + suffix for suffix in suffixes]
+        drop_cols = [c for c in all_columns
+                     if c.startswith(prefix) and c not in dis_cols]
+        data = data.drop(columns=drop_cols)
+        final_col = prefix + 'post_0'
+        data.loc[:, final_col] = 1.0
+
+    return data
 
 
 def assemble_tobacco_artifacts(num_draws, output_path: Path, seed: int = RANDOM_SEED):
@@ -327,110 +450,3 @@ def assemble_tobacco_artifacts(num_draws, output_path: Path, seed: int = RANDOM_
         print(nm_artifact_file)
         print(m_artifact_file)
 
-
-def write_table(artifact, path, data):
-    """
-    Write a data table to an artifact, after ensuring that it doesn't contain
-    any NA values.
-
-    :param artifact: The artifact object.
-    :param path: The table path.
-    :param data: The table data.
-    """
-    if np.any(data.isna()):
-        msg = 'NA values in table {} for {}'.format(path, artifact.path)
-        raise ValueError(msg)
-
-    logger = logging.getLogger(__name__)
-    logger.info('{} Writing table {} to {}'.format(
-        datetime.datetime.now().strftime("%H:%M:%S"), path, artifact.path))
-
-    #Add age,sex,year etc columns to multi index
-    col_index_filters = ['year','age','sex','year_start','year_end','age_start','age_end']
-    data.set_index([col_name for col_name in data.columns if col_name in col_index_filters], inplace =True)
-    
-    #Convert wide to long for tobacco
-    if 'value' not in data.columns:
-        data = pd.melt(data.reset_index(), id_vars=data.index.names,var_name = 'measure').\
-        set_index(data.index.names+['measure'])
-
-    artifact.write(path, data)
-
-
-def collapse_tobacco_prevalence(data, exposure):
-    """
-    Collapse the tunnel states into a single post-cessation state.
-
-    :param data: The prevalence data.
-    :param exposure: The name of the exposure.
-    """
-    all_columns = data.columns
-
-    prefix = '{}.'.format(exposure)
-    suffixes = ['no', 'yes', '0']
-
-    prev_cols = [prefix + suffix for suffix in suffixes]
-    idx_cols = [c for c in all_columns if not c.startswith(exposure)]
-
-    want_cols = idx_cols + prev_cols
-    keep_cols = [c for c in all_columns if c in want_cols]
-    data = data.loc[:, keep_cols]
-
-    # Ensure that each row sums to unity.
-    final_col = prefix + '0'
-    other_prev_cols = [c for c in prev_cols if c != final_col]
-    data.loc[:, final_col] = 1.0 - data.loc[:, other_prev_cols].sum(axis=1)
-
-    return data
-
-
-def collapse_tobacco_mortality_rr(data, exposure):
-    """
-    Make remission instantly confer a relative risk of 1.0.
-
-    :param data: The mortality relative risk data.
-    :param exposure: The name of the exposure.
-    """
-    all_columns = data.columns
-
-    bau_prefix = '{}.'.format(exposure)
-    int_prefix = '{}_intervention.'.format(exposure)
-    suffixes = ['no', 'yes', '0']
-
-    bau_cols = [bau_prefix + suffix for suffix in suffixes]
-    int_cols = [int_prefix + suffix for suffix in suffixes]
-    idx_cols = [c for c in all_columns if not c.startswith(exposure)]
-
-    want_cols = idx_cols + bau_cols + int_cols
-    keep_cols = [c for c in all_columns if c in want_cols]
-    data = data.loc[:, keep_cols]
-
-    bau_final = bau_prefix + '0'
-    int_final = int_prefix + '0'
-    data.loc[:, bau_final] = 1.0
-    data.loc[:, int_final] = 1.0
-
-    return data
-
-
-def collapse_tobacco_disease_rr(data):
-    """
-    Make remission instantly confer a relative risk of 1.0.
-
-    :param data: The disease incidence relative risk data.
-    """
-    all_columns = data.columns
-
-    diseases = list({c[:-4] for c in all_columns if c.endswith('_yes')})
-    suffixes = ['no', 'yes', 'post_0']
-
-    for disease in diseases:
-        prefix = '{}_'.format(disease)
-        dis_cols = [prefix + suffix for suffix in suffixes]
-        drop_cols = [c for c in all_columns
-                     if c.startswith(prefix) and c not in dis_cols]
-        data = data.drop(columns=drop_cols)
-        final_col = prefix + 'post_0'
-        data.loc[:, final_col] = 1.0
-
-    return data

@@ -19,8 +19,8 @@ To set up a new research environment, open up a terminal and run::
     $> conda create --name=mslt_tobacco python=3.6
     ...standard conda install stuff...
     $> conda activate mslt_tobacco
-    (mslt_tobacco) $> git clone git@github.com:ihmeuw/vivarium_unimelb_tobacco_intervention_comparison.git
-    (mslt_tobacco) $> cd vivarium_unimelb_tobacco_intervention_comparison
+    (mslt_tobacco) $> git clone git@github.com:ihmeuw/unimelb_viv.git
+    (mslt_tobacco) $> cd unimelb_viv
     (mslt_tobacco) $> pip install -e .
 
 See the :ref:`getting-started` section of the tutorial for further details.

@@ -1,17 +1,14 @@
 components:
-    vivarium_unimelb_tobacco_intervention_comparison:
+    unimelb_viv:
         mslt:
             population:
                 - BasePopulation()
                 - Mortality()
                 - Disability()
-            disease:
-                - Disease('CHD')
             intervention:
-                - ModifyDiseaseIncidence('reduce_chd', 'CHD')
+                - ModifyAllCauseMortality('reduce_acmr')
             observer:
                 - MorbidityMortality()
-                - Disease('CHD')
 
 configuration:
     input_data:
@@ -34,8 +31,8 @@ configuration:
             year: 2120
         step_size: 365  # In days
     intervention:
-        reduce_chd:
-            # Reduce the CHD incidence rate by 5%.
-            CHD_incidence_scale: 0.95
+        reduce_acmr:
+            # Reduce the all-cause mortality rate by 5%.
+            scale: 0.95
     observer:
         output_prefix: results/{{ basename }}

@@ -1,5 +1,5 @@
 components:
-    vivarium_unimelb_tobacco_intervention_comparison:
+    unimelb_viv:
         mslt:
             population:
                 - BasePopulation()
