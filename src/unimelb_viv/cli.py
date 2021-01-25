@@ -3,7 +3,8 @@ from pathlib import Path
 
 import click
 
-from unimelb_viv.external_data import assemble_tobacco_artifacts
+from unimelb_viv.cold_housing import assemble_artifacts
+from unimelb_viv.cold_housing import test_artifacts
 from unimelb_viv.external_data import (create_model_specifications,
                                                                             create_reduce_acmr_specification,
                                                                             create_reduce_chd_specification)
@@ -24,6 +25,11 @@ def make_artifacts(scenario):
                  f'draws at {str(output_path)}')
 
     assemble_tobacco_artifacts(draws, output_path)
+
+
+@click.command()
+def test():
+    test_artifacts()
 
 
 @click.command()

@@ -73,6 +73,7 @@ if __name__ == "__main__":
 
         entry_points="""
             [console_scripts]
+            test=unimelb_viv.cli:test
             make_artifacts=unimelb_viv.cli:make_artifacts
             make_model_specifications=unimelb_viv.cli:make_model_specifications
             run_uncertainty_analysis=unimelb_viv.cli:run_uncertainty_analysis
