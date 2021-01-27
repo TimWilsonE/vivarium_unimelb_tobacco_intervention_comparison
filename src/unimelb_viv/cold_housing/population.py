@@ -5,7 +5,7 @@ import numpy as np
 import pathlib
 
 from .uncertainty import sample_fixed_rate_from
-from unimelb_viv.cold_housing.utilities import load_csv, col_to_bins
+from unimelb_viv.cold_housing.utilities import load_csv, col_to_bin, df_cross
 
 SUB_POPS = 5
 
@@ -31,7 +31,7 @@ class Population:
 
         # Sort the rows.
         df = df.sort_values(by=['year', 'age', 'sex']).reset_index(drop=True)
-
+        
         self.year_start = year_start
         self.year_end = year_start + df['age'].max() - df['age'].min()
         self._num_apc_years = 15
@@ -41,60 +41,46 @@ class Population:
 
     def __init__(self, data_dir, year_start):
         self.df_base = self.load_base_pop(data_dir, year_start)
-        self.df_cohort = load_csv('maori_cohort_population_data.csv', data_dir)
-        
-        df = self.df_cohort.rename(columns = {'N' : 'population'})
-        
+        self.df_cohort = load_csv('maori_base_population_RR.csv', data_dir)
+
         # Retain only the necessary columns.
-        df.set_index(['age', 'sex', 'year'], inplace=True)
-        df = df[['prop{}'.format(k) for k in range(SUB_POPS)] + 
-                ['mort_RR{}'.format(k) for k in range(SUB_POPS)] +
-                ['yld_RR{}'.format(k) for k in range(SUB_POPS)] +
-                ['population', 'yld', 'mortality']]
+        df = (self.df_cohort.set_index(['age', 'sex']))[
+            ['prop{}'.format(k) for k in range(SUB_POPS)] + 
+            ['mort_RR{}'.format(k) for k in range(SUB_POPS)] +
+            ['yld_RR{}'.format(k) for k in range(SUB_POPS)]]
         
-        self.agg_mort = df[['mortality']].rename(columns = {'mortality': 'value'})
-        self.agg_yld = df[['yld']].rename(columns = {'yld': 'value'})
-        self.agg_pop = (df[df.index.get_level_values('year') == 2011]
-            )[['population']].rename(columns = {'population': 'value'})
-        
-        self.prop_pop = ((df[df.index.get_level_values('year') == 2011]).
+        self.prop_pop = (df.
             rename(columns = dict([('prop{}'.format(k), k) for k in range(SUB_POPS)])).
             melt(id_vars = [], value_vars=range(SUB_POPS), ignore_index=False).
             rename(columns = {'variable': 'strata'}).
-            set_index(['strata'], append=True))
+            assign(year = 2011).
+            set_index(['strata', 'year'], append=True))
         
         self.prop_mort = (df.
             rename(columns=dict([('mort_RR{}'.format(k), k) for k in range(SUB_POPS)])).
             melt(id_vars = [], value_vars=range(SUB_POPS), ignore_index=False).
+            reset_index().
+            assign(_key = 1).
+            merge(pd.DataFrame({'_key': 1, 'year': self.years()}), on='_key', how='outer').
+            drop('_key', axis=1).
             rename(columns = {'variable': 'strata'}).
-            set_index(['strata'], append=True))
+            set_index(['year', 'age', 'sex', 'strata']))
+        self.prop_mort = col_to_bin(col_to_bin(self.prop_mort, 'age', 1), 'year', 1)
         
         self.prop_yld = (df.
             rename(columns=dict([('yld_RR{}'.format(k), k) for k in range(SUB_POPS)])).
             melt(id_vars = [], value_vars=range(SUB_POPS), ignore_index=False).
             rename(columns = {'variable': 'strata'}).
-            set_index(['strata'], append=True))
-        
-        col_to_bins(self.prop_mort, 'age', 1)
-
+            assign(year = 2011).
+            set_index(['strata', 'year'], append=True))
+        self.prop_yld = col_to_bin(col_to_bin(self.prop_yld, 'age', 1), 'year', 110)
 
 
     def years(self):
         """Return an iterator over the simulation period."""
         return range(self.year_start, self.year_end + 1)
     
-
-    def get_agg_population(self):
-        return self.agg_pop
-
-
-    def get_agg_mort(self):
-        return self.agg_mort
-
-
-    def get_agg_yld(self):
-        return self.agg_yld
-        
+    
     def get_prop_population(self):
         return self.prop_pop
 
@@ -105,6 +91,39 @@ class Population:
 
     def get_prop_yld(self):
         return self.prop_yld
+    
+    
+    def get_population(self):
+        """Return the initial population size for each stratum."""
+        cols = ['year', 'age', 'sex', 'population']
+        # Retain only those strata for whom the population size is defined.
+        df = self.df_base.loc[self.df_base['population'].notna(), cols].copy()
+        df = df.rename(columns = {'population': 'value'})
+        df = df.set_index(['year', 'age', 'sex'])
+        return df
+    
+    
+    def get_disability_rate(self):
+        """Return the disability rate for each stratum."""
+        df = self.df_base[['age', 'sex', 'disability_rate']]
+        df = df.rename(columns={'disability_rate': 'value'})
+
+        # Replace 'age' with age groups.
+        df = df.rename(columns={'age': 'age_start'})
+        df.insert(df.columns.get_loc('age_start') + 1,
+                  'age_end',
+                  df['age_start'] + 1)
+
+        # These values apply at each year of the simulation, so we only need
+        # to define a single bin.
+        df.insert(0, 'year_start', self.year_start)
+        df.insert(1, 'year_end', self.year_end + 1)
+
+        df = df.sort_values(['year_start', 'age_start', 'sex'])
+        df = df.set_index(['year_start', 'year_end', 'age_start', 'age_end', 'sex'])
+
+        return df
+    
     
     def get_acmr_apc(self):
         """Return the annual percent change (APC) in mortality rate."""
@@ -120,6 +139,7 @@ class Population:
         df = df.reset_index(drop=True)
 
         return df
+
 
     def get_mortality_rate(self):
         # - ACMR = BASE_ACMR * e^(APC * (year - 2011))
@@ -156,10 +176,8 @@ class Population:
             df_acmr['year_end'] = year + 1
             tables.append(df_acmr.copy())
 
-        df = pd.concat(tables).sort_values(['year_start', 'age_start',
-                                            'sex'])
-        df = df.reset_index(drop=True)
-
+        df = pd.concat(tables).sort_values(['year_start', 'age_start', 'sex'])
+        df = df.set_index(['year_start', 'year_end', 'age_start', 'age_end', 'sex'])
         return df
     
     

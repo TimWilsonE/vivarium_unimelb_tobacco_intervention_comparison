@@ -94,11 +94,11 @@ def assemble_artifacts(num_draws, output_path: Path, seed: int = RANDOM_SEED):
     logger.info('{} Writing population tables'.format(
                 datetime.datetime.now().strftime("%H:%M:%S")))
     
-    write_table(artifact, 'population.agg', pop.get_agg_population())
+    write_table(artifact, 'population.agg', pop.get_population())
     write_table(artifact, 'population.prop', pop.get_prop_population())
     write_table(artifact, 'mortality.agg', pop.get_mortality_rate())
     write_table(artifact, 'mortality.prop', pop.get_prop_mort())
-    write_table(artifact, 'yld.agg', pop.get_agg_yld())
+    write_table(artifact, 'yld.agg', pop.get_disability_rate())
     write_table(artifact, 'yld.prop', pop.get_prop_yld())
 
 
