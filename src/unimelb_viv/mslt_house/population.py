@@ -169,22 +169,35 @@ class Mortality:
         if pop.empty:
             return
         
+        # Read in values that may be modified, as they are rate_producers.
+        # Note that self.mortality_agg is only indexed by age and sex. This means that pop.acmr
+        # is the acmr for the whole cohort, not yet seperated into strata.
         pop.acmr = self.mortality_agg(event.index)
         pop.acmr_prop = self.mortality_prop(event.index)
+        
+        # Sum over the population of the strata in each cohort, as we need to know total
+        # population to work with total acmr.
         pop_agg = pop[['age', 'sex', 'population']].groupby(['sex', 'age']).sum().reset_index()
+        
+        # Note that acmr_prop only exists to make the following code work nicely.
         pop_prop = pop[['age', 'sex', 'strata', 'population', 'acmr', 'acmr_prop']]
         
         for index, row in pop_agg.iterrows():
+            # Find the strata data for this row of the aggregate population table.
             strata = pop_prop.loc[(pop_prop['age'] == row.age) & (pop_prop['sex'] == row.sex)]
             rates = self.get_subpop_rates_2state(
                 row.population, strata['acmr'].iloc[0], 
                 strata['population'], strata['acmr_prop'])
             
+            # Overwrite the appropriate part of the stratified pop table with the calculated
+            # rates. Each entry in the table is now the correct mortality rate.
             rates = rates.rename('acmr')
             pop_prop = pop_prop.merge(rates, how='left', left_index=True, right_index=True)
             pop_prop['acmr'] = pop_prop['acmr_y'].fillna(pop_prop['acmr_x'])
             pop_prop = pop_prop.drop(['acmr_x','acmr_y'], axis=1)
         
+        # Write the correct acmr for each strata into the main pop table, then iterate the state
+        # of each row of the table independently.
         pop.acmr = pop_prop.acmr
         probability_of_death = 1 - np.exp(-pop.acmr)
         deaths = pop.population * probability_of_death
@@ -193,7 +206,7 @@ class Mortality:
         pop.deaths = deaths
         pop.person_years = pop.population + 0.5 * pop.deaths
         
-        
+        # BAU does not yet use the hetrogeneity code.
         pop.bau_acmr = self.mortality_agg.source(event.index)
         bau_probability_of_death = 1 - np.exp(-pop.bau_acmr)
         bau_deaths = pop.bau_population * bau_probability_of_death
