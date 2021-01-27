@@ -25,8 +25,14 @@ To set up a new research environment, open up a terminal and run::
 
 See the :ref:`getting-started` section of the tutorial for further details.
 
+Testing
+------------
+
+simulate run -v model_specifications/house_test.yaml
+
 Working Package List
 ------------
+
 aiocontextvars==0.2.2
 certifi==2020.12.5
 click==7.1.2

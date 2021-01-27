@@ -65,7 +65,7 @@ class BasePopulation:
         columns = ['age', 'sex', 'strata', 'population', 'bau_population',
                    'acmr', 'acmr_prop', 'bau_acmr',
                    'pr_death', 'bau_pr_death', 'deaths', 'bau_deaths',
-                   'yld_rate', 'bau_yld_rate',
+                   'yld_rate', 'yld_prop', 'bau_yld_rate',
                    'person_years', 'bau_person_years',
                    'HALY', 'bau_HALY']
 
@@ -186,6 +186,8 @@ class Mortality:
         for index, row in pop_agg.iterrows():
             # Find the strata data for this row of the aggregate population table.
             strata = pop_prop.loc[(pop_prop['age'] == row.age) & (pop_prop['sex'] == row.sex)]
+            # Now the fact that acmr is not per strata comes into play, as we all we want is
+            # the value for the cohort. We simply read it from the first strata with iloc[0].
             rates = self.get_subpop_rates_2state(
                 row.population, strata['acmr'].iloc[0], 
                 strata['population'], strata['acmr_prop'])
@@ -231,19 +233,42 @@ class Disability:
 
     def setup(self, builder):
         """Load the years lost due to disability (YLD) rate."""
-        yld_data = builder.data.load('yld.agg')
-        yld_rate = builder.lookup.build_table(yld_data, 
-                                              key_columns=['sex'], 
-                                              parameter_columns=['age','year'])
-        self.yld_rate = builder.value.register_rate_producer('yld_rate', source=yld_rate)
+        yld_agg = builder.data.load('yld.agg')
+        self.yld_agg = builder.value.register_rate_producer(
+            'yld_agg', source=builder.lookup.build_table(
+                yld_agg, 
+                key_columns=['sex'], 
+                parameter_columns=['age','year']))
+        
+        yld_prop = builder.data.load('yld.prop')
+        self.yld_prop = builder.value.register_rate_producer(
+            'yld_prop', source=builder.lookup.build_table(
+                yld_prop, 
+                key_columns=['sex', 'strata'], 
+                parameter_columns=['age','year']))
 
         builder.event.register_listener('time_step', self.on_time_step)
 
         self.population_view = builder.population.get_view([
-            'bau_yld_rate', 'yld_rate',
+            'age', 'sex', 'strata',
+            'bau_yld_rate', 'yld_rate', 'yld_prop',
             'bau_person_years', 'person_years',
             'bau_HALY', 'HALY'])
 
+
+    def disaggregate_YLD(self, agg_py, agg_yld, sub_py, sub_yld_ratios):
+        '''Returns transition rates for sub-populations for current timestep t assuming 
+        sub-populations change according to two-state Markov process.
+        '''
+        if agg_yld == 0:
+            return 0 * sub_py
+        
+        ref_YLD = agg_py * agg_yld / np.sum(sub_yld_ratios * sub_py)
+        # The following needs to be true
+        # agg_py * (1 - agg_yld) == np.sum(sub_py * (1 - ref_YLD * sub_yld_ratios))
+        return ref_YLD * sub_yld_ratios
+    
+    
     def on_time_step(self, event):
         """
         Calculate the HALYs for each cohort at each time-step, for both the
@@ -252,9 +277,39 @@ class Disability:
         pop = self.population_view.get(event.index)
         if pop.empty:
             return
-        pop.yld_rate = self.yld_rate(event.index)
-        pop.bau_yld_rate = self.yld_rate.source(event.index)
-        pop.HALY = pop.person_years * (1 - pop.yld_rate)
+        
+        # Note that self.yld_agg is only indexed by age and sex. It is not yet seperated into
+        # strata.
+        pop.yld_rate = self.yld_agg(event.index)
+        pop.yld_prop = self.yld_prop(event.index)
+        
+        # Calculate lived person years for this time step for each strata.
+        pop_agg = pop[['age', 'sex', 'person_years']].groupby(['sex', 'age']).sum().reset_index()
+        
+        # Note that yld_prop only exists to make the following code work nicely.
+        pop_prop = pop[['age', 'sex', 'strata', 'person_years', 'yld_rate', 'yld_prop']]
+        
+        # TODO, vectorise this loop.
+        for index, row in pop_agg.iterrows():
+            # Find the strata data for this row of the aggregate population table.
+            strata = pop_prop.loc[(pop_prop['age'] == row.age) & (pop_prop['sex'] == row.sex)]
+            # Now the fact that yld_rate is not per strata comes into play, as we all we want is
+            # the value for the cohort. We simply read it from the first strata with iloc[0].
+            rates = self.disaggregate_YLD(
+                row.person_years, strata['yld_rate'].iloc[0], 
+                strata['person_years'], strata['yld_prop'])
+            
+            # Overwrite the appropriate part of the stratified pop table with the calculated
+            # rates. Each entry in the table is now the correct mortality rate.
+            rates = rates.rename('yld_rate')
+            pop_prop = pop_prop.merge(rates, how='left', left_index=True, right_index=True)
+            pop_prop['yld_rate'] = pop_prop['yld_rate_y'].fillna(pop_prop['yld_rate_x'])
+            pop_prop = pop_prop.drop(['yld_rate_x','yld_rate_y'], axis=1)
+        
+        pop.yld_rate = pop_prop.yld_rate
+        pop.HALY = pop.person_years * (1 - pop.yld_rate) 
+            
+        pop.bau_yld_rate = self.yld_agg.source(event.index)
         pop.bau_HALY = pop.bau_person_years * (1 - pop.bau_yld_rate)
         self.population_view.update(pop)
         
