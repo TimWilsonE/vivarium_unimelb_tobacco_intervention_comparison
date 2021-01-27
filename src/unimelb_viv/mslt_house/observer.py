@@ -81,7 +81,7 @@ class MorbidityMortality:
 
     def setup(self, builder):
         # Record the key columns from the core multi-state life table.
-        columns = ['age', 'sex',
+        columns = ['age', 'sex', 'strata',
                    'population', 'bau_population',
                    'acmr', 'bau_acmr',
                    'pr_death', 'bau_pr_death',
@@ -94,7 +94,7 @@ class MorbidityMortality:
         builder.event.register_listener('collect_metrics', self.on_collect_metrics)
         builder.event.register_listener('simulation_end', self.write_output)
         self.tables = []
-        self.table_cols = ['sex', 'age', 'year',
+        self.table_cols = ['sex', 'age', 'strata', 'year',
                            'population', 'bau_population',
                            'prev_population', 'bau_prev_population',
                            'acmr', 'bau_acmr',
@@ -155,7 +155,7 @@ class MorbidityMortality:
         # Sort the table by cohort (i.e., generation and sex), and then by
         # calendar year, so that results are output in the same order as in
         # the spreadsheet models.
-        data = data.sort_values(by=['year_of_birth', 'sex', 'age'], axis=0)
+        data = data.sort_values(by=['year_of_birth', 'sex', 'age', 'strata'], axis=0)
         data = data.reset_index(drop=True)
         # Re-order the table columns.
         cols = ['year_of_birth'] + self.table_cols
@@ -207,7 +207,7 @@ class Disease:
         self.int_S_col = '{}_S_intervention'.format(self._name)
         self.int_C_col = '{}_C_intervention'.format(self._name)
 
-        columns = ['age', 'sex',
+        columns = ['age', 'sex', 'strata',
                    self.bau_S_col, self.bau_C_col,
                    self.int_S_col, self.int_C_col]
         self.population_view = builder.population.get_view(columns)
@@ -216,7 +216,7 @@ class Disease:
         builder.event.register_listener('simulation_end', self.write_output)
 
         self.tables = []
-        self.table_cols = ['sex', 'age', 'year',
+        self.table_cols = ['sex', 'age', 'strata', 'year',
                            'bau_incidence', 'int_incidence',
                            'bau_prevalence', 'int_prevalence',
                            'bau_deaths', 'int_deaths']
@@ -248,7 +248,7 @@ class Disease:
         # Sort the table by cohort (i.e., generation and sex), and then by
         # calendar year, so that results are output in the same order as in
         # the spreadsheet models.
-        data = data.sort_values(by=['year_of_birth', 'sex', 'age'], axis=0)
+        data = data.sort_values(by=['year_of_birth', 'sex', 'age', 'strata'], axis=0)
         data = data.reset_index(drop=True)
         # Re-order the table columns.
         diff_cols = ['diff_incidence', 'diff_prevalence']
@@ -280,11 +280,11 @@ class TobaccoPrevalence:
         self.clock = builder.time.clock()
         self.bin_years = int(self.config['tobacco']['delay'])
 
-        view_columns = ['age', 'sex', 'bau_population', 'population'] + self.get_bin_names()
+        view_columns = ['age', 'sex', 'strata', 'bau_population', 'population'] + self.get_bin_names()
         self.population_view = builder.population.get_view(view_columns)
 
         self.tables = []
-        self.table_cols = ['age', 'sex', 'year',
+        self.table_cols = ['age', 'sex', 'strata', 'year',
                            'bau_no', 'bau_yes', 'bau_previously', 'bau_population',
                            'int_no', 'int_yes', 'int_previously', 'int_population']
 
@@ -356,7 +356,7 @@ class TobaccoPrevalence:
         # Sort the table by cohort (i.e., generation and sex), and then by
         # calendar year, so that results are output in the same order as in
         # the spreadsheet models.
-        data = data.sort_values(by=['year_of_birth', 'sex', 'age'], axis=0)
+        data = data.sort_values(by=['year_of_birth', 'sex', 'age', 'strata'], axis=0)
         data = data.reset_index(drop=True)
         # Re-order the table columns.
         cols = ['year_of_birth'] + self.table_cols

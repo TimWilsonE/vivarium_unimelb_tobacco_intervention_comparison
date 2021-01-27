@@ -8,6 +8,8 @@ multi-state lifetable simulations.
 
 """
 import numpy as np
+from scipy import optimize
+import pdb
 
 
 class BasePopulation:
@@ -61,7 +63,7 @@ class BasePopulation:
     def setup(self, builder):
         """Load the population data."""
         columns = ['age', 'sex', 'strata', 'population', 'bau_population',
-                   'acmr', 'bau_acmr',
+                   'acmr', 'acmr_prop', 'bau_acmr',
                    'pr_death', 'bau_pr_death', 'deaths', 'bau_deaths',
                    'yld_rate', 'bau_yld_rate',
                    'person_years', 'bau_person_years',
@@ -130,9 +132,33 @@ class Mortality:
         builder.event.register_listener('time_step', self.on_time_step)
 
         self.population_view = builder.population.get_view([
-            'population', 'bau_population', 'acmr', 'bau_acmr',
+            'age', 'sex', 'strata',
+            'population', 'bau_population', 'acmr', 'acmr_prop', 'bau_acmr',
             'pr_death', 'bau_pr_death', 'deaths', 'bau_deaths',
             'person_years', 'bau_person_years'])
+
+
+    def population_state_timestep_2state(self, pop, rate):
+        '''Computes new population(s) for end of the timestep assuming population(s) changes 
+        according to two-state Markov process.
+        '''
+        new_pop =  pop*np.exp(-rate)
+        return new_pop
+
+
+    def get_subpop_rates_2state(self, agg_pop, agg_rate, sub_pops, rate_ratios):
+        '''Returns transition rates for sub-populations for current timestep t assuming 
+        sub-populations change according to two-state Markov process.
+        '''
+        if agg_rate == 0:
+            return 0 * rate_ratios
+        
+        f = lambda x: np.sum(sub_pops*np.power(x,rate_ratios)) - self.population_state_timestep_2state(agg_pop, agg_rate)
+        if f(0)*f(1) >= 0:
+            pdb.set_trace()
+        root = optimize.brentq(f,0,1)
+        return -np.log(root)*rate_ratios
+
 
     def on_time_step(self, event):
         """
@@ -142,19 +168,38 @@ class Mortality:
         pop = self.population_view.get(event.index)
         if pop.empty:
             return
+        
         pop.acmr = self.mortality_agg(event.index)
+        pop.acmr_prop = self.mortality_prop(event.index)
+        pop_agg = pop[['age', 'sex', 'population']].groupby(['sex', 'age']).sum().reset_index()
+        pop_prop = pop[['age', 'sex', 'strata', 'population', 'acmr', 'acmr_prop']]
+        
+        for index, row in pop_agg.iterrows():
+            strata = pop_prop.loc[(pop_prop['age'] == row.age) & (pop_prop['sex'] == row.sex)]
+            rates = self.get_subpop_rates_2state(
+                row.population, strata['acmr'].iloc[0], 
+                strata['population'], strata['acmr_prop'])
+            
+            rates = rates.rename('acmr')
+            pop_prop = pop_prop.merge(rates, how='left', left_index=True, right_index=True)
+            pop_prop['acmr'] = pop_prop['acmr_y'].fillna(pop_prop['acmr_x'])
+            pop_prop = pop_prop.drop(['acmr_x','acmr_y'], axis=1)
+        
+        pop.acmr = pop_prop.acmr
         probability_of_death = 1 - np.exp(-pop.acmr)
         deaths = pop.population * probability_of_death
         pop.population *= 1 - probability_of_death
+        pop.pr_death = probability_of_death
+        pop.deaths = deaths
+        pop.person_years = pop.population + 0.5 * pop.deaths
+        
+        
         pop.bau_acmr = self.mortality_agg.source(event.index)
         bau_probability_of_death = 1 - np.exp(-pop.bau_acmr)
         bau_deaths = pop.bau_population * bau_probability_of_death
         pop.bau_population *= 1 - bau_probability_of_death
-        pop.pr_death = probability_of_death
         pop.bau_pr_death = bau_probability_of_death
-        pop.deaths = deaths
         pop.bau_deaths = bau_deaths
-        pop.person_years = pop.population + 0.5 * pop.deaths
         pop.bau_person_years = pop.bau_population + 0.5 * pop.bau_deaths
         self.population_view.update(pop)
 
