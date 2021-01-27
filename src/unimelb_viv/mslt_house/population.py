@@ -38,20 +38,36 @@ class BasePopulation:
         }
     }
 
+    def load_population_data(self, builder):
+        pop_agg = builder.data.load('population.agg')
+        pop_agg = pop_agg[['age', 'sex', 'value']].rename(columns={'value': 'population'})
+        
+        pop_prop = builder.data.load('population.prop')
+        pop_prop = pop_prop[['age', 'sex', 'strata', 'value']].rename(columns={'value': 'prop'})
+        
+        pop_data = pop_agg.merge(pop_prop, how='inner', on=['age', 'sex'])
+        # TODO. Divide by the sum of prop for matching age and sex in case prop does not add to 1.
+        pop_data['population'] *= pop_data['prop']
+        pop_data.drop(columns=['prop'], axis=1, inplace=True)
+        pop_data['bau_population'] = pop_data['population']
+        
+        return pop_data
+
+
     @property
     def name(self):
         return 'base_population'
     
     def setup(self, builder):
         """Load the population data."""
-        columns = ['age', 'sex', 'population', 'bau_population',
+        columns = ['age', 'sex', 'strata', 'population', 'bau_population',
                    'acmr', 'bau_acmr',
                    'pr_death', 'bau_pr_death', 'deaths', 'bau_deaths',
                    'yld_rate', 'bau_yld_rate',
                    'person_years', 'bau_person_years',
                    'HALY', 'bau_HALY']
 
-        self.pop_data = load_population_data(builder)
+        self.pop_data = self.load_population_data(builder)
         
         # Create additional columns with placeholder (zero) values.
         for column in columns:
@@ -97,19 +113,26 @@ class Mortality:
 
     def setup(self, builder):
         """Load the all-cause mortality rate."""
-        mortality_data = builder.data.load('mortality.agg')
-        self.mortality_rate = builder.value.register_rate_producer(
-            'mortality_rate', source=builder.lookup.build_table(mortality_data, 
-                                                                key_columns=['sex'], 
-                                                                parameter_columns=['age','year']))
+        mortality_agg = builder.data.load('mortality.agg')
+        self.mortality_agg = builder.value.register_rate_producer(
+            'mortality_agg', source=builder.lookup.build_table(
+                mortality_agg, 
+                key_columns=['sex'], 
+                parameter_columns=['age','year']))
+        
+        mortality_prop = builder.data.load('mortality.prop')
+        self.mortality_prop = builder.value.register_rate_producer(
+            'mortality_prop', source=builder.lookup.build_table(
+                mortality_prop, 
+                key_columns=['sex', 'strata'], 
+                parameter_columns=['age','year']))
 
         builder.event.register_listener('time_step', self.on_time_step)
 
-        self.population_view = builder.population.get_view(['population', 'bau_population',
-                                                            'acmr', 'bau_acmr',
-                                                            'pr_death', 'bau_pr_death',
-                                                            'deaths', 'bau_deaths',
-                                                            'person_years', 'bau_person_years'])
+        self.population_view = builder.population.get_view([
+            'population', 'bau_population', 'acmr', 'bau_acmr',
+            'pr_death', 'bau_pr_death', 'deaths', 'bau_deaths',
+            'person_years', 'bau_person_years'])
 
     def on_time_step(self, event):
         """
@@ -119,11 +142,11 @@ class Mortality:
         pop = self.population_view.get(event.index)
         if pop.empty:
             return
-        pop.acmr = self.mortality_rate(event.index)
+        pop.acmr = self.mortality_agg(event.index)
         probability_of_death = 1 - np.exp(-pop.acmr)
         deaths = pop.population * probability_of_death
         pop.population *= 1 - probability_of_death
-        pop.bau_acmr = self.mortality_rate.source(event.index)
+        pop.bau_acmr = self.mortality_agg.source(event.index)
         bau_probability_of_death = 1 - np.exp(-pop.bau_acmr)
         bau_deaths = pop.bau_population * bau_probability_of_death
         pop.bau_population *= 1 - bau_probability_of_death
@@ -175,10 +198,4 @@ class Disability:
         pop.HALY = pop.person_years * (1 - pop.yld_rate)
         pop.bau_HALY = pop.bau_person_years * (1 - pop.bau_yld_rate)
         self.population_view.update(pop)
-
-
-def load_population_data(builder):
-    pop_data = builder.data.load('population.agg')
-    pop_data = pop_data[['age', 'sex', 'value']].rename(columns={'value': 'population'})
-    pop_data['bau_population'] = pop_data['population']
-    return pop_data
+        

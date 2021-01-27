@@ -19,9 +19,10 @@ configuration:
         validate: False
     population:
         # The population size here is the number of cohorts.
-        # There are 22 age bins (0-4, 5-9, ..., 105-109) for females and for
-        # males, making a total of 44 cohorts.
-        population_size: 44
+        # There are 22 age bins (0-4, 5-9, ..., 105-109), two
+        # sexes, and five strata, making a total of 22*2*5
+        # cohorts.
+        population_size: 220
     time:
         start:
             year: 2011

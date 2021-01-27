@@ -21,6 +21,7 @@ def output_csv_mkdir(data, path, index):
     if not os.path.exists(out_folder):
         os.mkdir(out_folder)
 
+    print(path)
     data.to_csv(path, index=index)
 
 
