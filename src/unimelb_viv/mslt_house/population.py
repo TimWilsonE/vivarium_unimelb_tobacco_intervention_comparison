@@ -182,6 +182,7 @@ class Mortality:
         # Note that acmr_prop only exists to make the following code work nicely.
         pop_prop = pop[['age', 'sex', 'strata', 'population', 'acmr', 'acmr_prop']]
         
+        # TODO, vectorise this loop.
         for index, row in pop_agg.iterrows():
             # Find the strata data for this row of the aggregate population table.
             strata = pop_prop.loc[(pop_prop['age'] == row.age) & (pop_prop['sex'] == row.sex)]
