@@ -11,6 +11,8 @@ import numpy as np
 from scipy import optimize
 import pdb
 
+from unimelb_viv.mslt_house.disaggregate import disaggregate_pop
+
 
 class BasePopulation:
     """
@@ -169,39 +171,11 @@ class Mortality:
         if pop.empty:
             return
         
-        # Read in values that may be modified, as they are rate_producers.
-        # Note that self.mortality_agg is only indexed by age and sex. This means that pop.acmr
-        # is the acmr for the whole cohort, not yet seperated into strata.
-        pop.acmr = self.mortality_agg(event.index)
-        pop.acmr_prop = self.mortality_prop(event.index)
+        pop.acmr = disaggregate_pop(pop, 'population', 'acmr', 'acmr_prop',
+            self.mortality_agg(event.index),
+            self.mortality_prop(event.index),
+            self.get_subpop_rates_2state)
         
-        # Sum over the population of the strata in each cohort, as we need to know total
-        # population to work with total acmr.
-        pop_agg = pop[['age', 'sex', 'population']].groupby(['sex', 'age']).sum().reset_index()
-        
-        # Note that acmr_prop only exists to make the following code work nicely.
-        pop_prop = pop[['age', 'sex', 'strata', 'population', 'acmr', 'acmr_prop']]
-        
-        # TODO, vectorise this loop.
-        for index, row in pop_agg.iterrows():
-            # Find the strata data for this row of the aggregate population table.
-            strata = pop_prop.loc[(pop_prop['age'] == row.age) & (pop_prop['sex'] == row.sex)]
-            # Now the fact that acmr is not per strata comes into play, as we all we want is
-            # the value for the cohort. We simply read it from the first strata with iloc[0].
-            rates = self.get_subpop_rates_2state(
-                row.population, strata['acmr'].iloc[0], 
-                strata['population'], strata['acmr_prop'])
-            
-            # Overwrite the appropriate part of the stratified pop table with the calculated
-            # rates. Each entry in the table is now the correct mortality rate.
-            rates = rates.rename('acmr')
-            pop_prop = pop_prop.merge(rates, how='left', left_index=True, right_index=True)
-            pop_prop['acmr'] = pop_prop['acmr_y'].fillna(pop_prop['acmr_x'])
-            pop_prop = pop_prop.drop(['acmr_x','acmr_y'], axis=1)
-        
-        # Write the correct acmr for each strata into the main pop table, then iterate the state
-        # of each row of the table independently.
-        pop.acmr = pop_prop.acmr
         probability_of_death = 1 - np.exp(-pop.acmr)
         deaths = pop.population * probability_of_death
         pop.population *= 1 - probability_of_death
@@ -209,7 +183,11 @@ class Mortality:
         pop.deaths = deaths
         pop.person_years = pop.population + 0.5 * pop.deaths
         
-        # BAU does not yet use the hetrogeneity code.
+        pop.bau_acmr = disaggregate_pop(pop, 'bau_population', 'bau_acmr', 'acmr_prop',
+            self.mortality_agg.source(event.index),
+            self.mortality_prop.source(event.index),
+            self.get_subpop_rates_2state)
+        
         pop.bau_acmr = self.mortality_agg.source(event.index)
         bau_probability_of_death = 1 - np.exp(-pop.bau_acmr)
         bau_deaths = pop.bau_population * bau_probability_of_death
@@ -217,6 +195,7 @@ class Mortality:
         pop.bau_pr_death = bau_probability_of_death
         pop.bau_deaths = bau_deaths
         pop.bau_person_years = pop.bau_population + 0.5 * pop.bau_deaths
+        
         self.population_view.update(pop)
 
 
@@ -278,38 +257,17 @@ class Disability:
         if pop.empty:
             return
         
-        # Note that self.yld_agg is only indexed by age and sex. It is not yet seperated into
-        # strata.
-        pop.yld_rate = self.yld_agg(event.index)
-        pop.yld_prop = self.yld_prop(event.index)
-        
-        # Calculate lived person years for this time step for each strata.
-        pop_agg = pop[['age', 'sex', 'person_years']].groupby(['sex', 'age']).sum().reset_index()
-        
-        # Note that yld_prop only exists to make the following code work nicely.
-        pop_prop = pop[['age', 'sex', 'strata', 'person_years', 'yld_rate', 'yld_prop']]
-        
-        # TODO, vectorise this loop.
-        for index, row in pop_agg.iterrows():
-            # Find the strata data for this row of the aggregate population table.
-            strata = pop_prop.loc[(pop_prop['age'] == row.age) & (pop_prop['sex'] == row.sex)]
-            # Now the fact that yld_rate is not per strata comes into play, as we all we want is
-            # the value for the cohort. We simply read it from the first strata with iloc[0].
-            rates = self.disaggregate_YLD(
-                row.person_years, strata['yld_rate'].iloc[0], 
-                strata['person_years'], strata['yld_prop'])
-            
-            # Overwrite the appropriate part of the stratified pop table with the calculated
-            # rates. Each entry in the table is now the correct mortality rate.
-            rates = rates.rename('yld_rate')
-            pop_prop = pop_prop.merge(rates, how='left', left_index=True, right_index=True)
-            pop_prop['yld_rate'] = pop_prop['yld_rate_y'].fillna(pop_prop['yld_rate_x'])
-            pop_prop = pop_prop.drop(['yld_rate_x','yld_rate_y'], axis=1)
-        
-        pop.yld_rate = pop_prop.yld_rate
+        pop.yld_rate = disaggregate_pop(pop, 'person_years', 'yld_rate', 'yld_prop',
+            self.yld_agg(event.index),
+            self.yld_prop(event.index),
+            self.disaggregate_YLD)
         pop.HALY = pop.person_years * (1 - pop.yld_rate) 
             
-        pop.bau_yld_rate = self.yld_agg.source(event.index)
+        pop.bau_yld_rate = disaggregate_pop(pop, 'bau_person_years', 'bau_yld_rate', 'yld_prop',
+            self.yld_agg.source(event.index),
+            self.yld_prop.source(event.index),
+            self.disaggregate_YLD)
         pop.bau_HALY = pop.bau_person_years * (1 - pop.bau_yld_rate)
+        
         self.population_view.update(pop)
         
