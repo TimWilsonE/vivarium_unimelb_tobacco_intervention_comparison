@@ -97,7 +97,8 @@ class BasePopulation:
 
     def on_time_step_prepare(self, event):
         """Remove cohorts that have reached the maximum age."""
-        pop = self.population_view.get(event.index, query='tracked == True')
+        #TODO, Meditate on this line. Just a dataframe query.
+        pop = self.population_view.get(event.index, query='tracked == True') 
         # Only increase cohort ages after the first time-step.
         if self.clock().year > self.start_year:
             pop['age'] += 1
